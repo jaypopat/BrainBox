@@ -35,7 +35,7 @@ Make sure you have the following installed:
 
    ```bash
    git clone https://github.com/jaypopat/BrainBox.git
-   cd brainbox
+   cd BrainBox
 
 2. **Run the application**:
 
