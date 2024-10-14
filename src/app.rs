@@ -24,7 +24,7 @@ impl AppState {
             current_node: None,
             search_query: String::new(),
             markdown_cache: CommonMarkCache::default(),
-            graph: MyGraph::new(&db).unwrap(),
+            graph: MyGraph::new(&db)?,
             show_graph: false,
             db,
         };
@@ -34,7 +34,7 @@ impl AppState {
     pub(crate) fn add_node(&mut self, title: String, content: String) -> sled::Result<String> {
         let id = Uuid::new_v4().to_string();
         let node = Node::new(id.clone(), title, content);
-        let s_node = serde_json::to_vec(&node).unwrap();
+        let s_node = serde_json::to_vec(&node).expect("Failed to serialize node");
         self.db.insert(id.clone(), s_node)?;
         Ok(id)
     }
@@ -47,9 +47,9 @@ impl AppState {
         // Update links in all nodes
         for item in self.db.iter() {
             let (key, value) = item?;
-            let mut node: Node = serde_json::from_slice(&value).unwrap();
+            let mut node: Node = serde_json::from_slice(&value).expect("Failed to deserialize node");
             node.links.retain(|link| link != id);
-            let updated_node = serde_json::to_vec(&node).unwrap();
+            let updated_node = serde_json::to_vec(&node).expect("Failed to serialize node");
             self.db.insert(key, updated_node)?;
         }
         Ok(())
@@ -57,17 +57,17 @@ impl AppState {
     // tried using parser for events but link was not a part of the elements enum hence the regex
     pub(crate) fn update_links(&mut self, node_id: &str, content: &str) -> sled::Result<()> {
         let mut new_links = Vec::new();
-        let re = Regex::new(r"\[\[(.+?)]]").unwrap();
+        let re = Regex::new(r"\[\[(.+?)]]").expect("Failed to create regex");
         for cap in re.captures_iter(content) {
             if let Some(link_title) = cap.get(1) {
                 for item in self.db.iter() {
                     let (key, value) = item?;
-                    let node: Node = serde_json::from_slice(&value).unwrap();
-                    println!("Checking node: {} with ID: {}", node.title, node.id);
+                    let node: Node = serde_json::from_slice(&value).expect("Failed to deserialize node");
+                    // println!("Checking node: {} with ID: {}", node.title, node.id);
                     if node.title == link_title.as_str() {
-                        println!("Link found: {}", link_title.as_str());
+                        // println!("Link found: {}", link_title.as_str());
                         if let Ok(key_str) = String::from_utf8(key.to_vec()) {
-                            println!("Link ID found: {}", key_str);
+                            // println!("Link ID found: {}", key_str);
                             new_links.push(key_str);
                         }
                     }
@@ -75,11 +75,11 @@ impl AppState {
             }
         }
         if let Some(value) = self.db.get(node_id)? {
-            let mut node: Node = serde_json::from_slice(&value).unwrap();
+            let mut node: Node = serde_json::from_slice(&value).expect("Failed to deserialize node");
             node.links = new_links;
-            let updated_node = serde_json::to_vec(&node).unwrap();
+            let updated_node = serde_json::to_vec(&node).expect("Failed to serialize node");
             self.db.insert(node_id, updated_node)?;
-            println!("Node id- {:?} title{} Updated node links: {:?}", node.id, node.title, node.links);
+            // println!("Node id- {:?} title{} Updated node links: {:?}", node.id, node.title, node.links);
         }
         Ok(())
     }

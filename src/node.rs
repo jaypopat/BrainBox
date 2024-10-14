@@ -14,7 +14,7 @@ impl Node {
             id,
             title,
             content,
-            links: vec![],
+            links: Vec::<String>::new(),
         }
     }
 }

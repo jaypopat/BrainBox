@@ -58,8 +58,8 @@ impl MyGraph {
     ) -> sled::Result<()> {
         for item in db.iter() {
             let (key, value) = item?;
-            let node: Node = serde_json::from_slice(&value).unwrap();
-            let id = String::from_utf8(key.to_vec()).unwrap();
+            let node: Node = serde_json::from_slice(&value).expect("Failed to deserialize node");
+            let id = String::from_utf8(key.to_vec()).expect("Failed to convert key to string");
             let node_index = g.add_node(node.title.clone());
             node_map.insert(id, node_index);
         }
@@ -73,8 +73,8 @@ impl MyGraph {
     ) -> sled::Result<()> {
         for item in db.iter() {
             let (key, value) = item?;
-            let node: Node = serde_json::from_slice(&value).unwrap();
-            let id = String::from_utf8(key.to_vec()).unwrap();
+            let node: Node = serde_json::from_slice(&value).expect("Failed to deserialize node");
+            let id = String::from_utf8(key.to_vec()).expect("Failed to convert key to string");
             if let Some(&from_index) = node_map.get(&id) {
                 for link in &node.links {
                     if let Some(&to_index) = node_map.get(link) {

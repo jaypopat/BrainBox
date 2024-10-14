@@ -1,4 +1,5 @@
 use egui_commonmark::CommonMarkViewer;
+
 use crate::app::AppState;
 use crate::node::Node;
 
@@ -9,7 +10,7 @@ impl eframe::App for AppState {
         // graph panel on the right
         egui::SidePanel::right("graph_panel").show(ctx, |ui| {
             if ui.button("View Graph").clicked() {
-                self.graph.update(&self.db).unwrap();
+                self.graph.update(&self.db).expect("Failed to update graph");
                 self.show_graph = !self.show_graph;
             }
 
@@ -22,7 +23,7 @@ impl eframe::App for AppState {
 
         // node list panel on the left
         egui::SidePanel::left("node_list").show(ctx, |ui| {
-            ui.heading("Notes");
+            ui.heading("BrainBox");
 
             // Search Bar
             ui.horizontal(|ui| {
@@ -31,17 +32,17 @@ impl eframe::App for AppState {
             });
 
             let mut node_to_select = None;
-            let nodes_to_display: Vec<_> = self.db.iter().collect::<Result<Vec<_>, _>>().unwrap();
+            let nodes_to_display: Vec<_> = self.db.iter().collect::<Result<Vec<_>, _>>().expect("Failed to get nodes");
 
             // Filtering nodes based on the search query
             for (id, node) in nodes_to_display.iter().filter(|(_, value)| {
-                let node: Node = serde_json::from_slice(value).unwrap();
+                let node: Node = serde_json::from_slice(value).expect("Failed to deserialize node");
                 node.title.to_lowercase().contains(&self.search_query.to_lowercase()) ||
                     node.content.to_lowercase().contains(&self.search_query.to_lowercase())
             }) {
-                let node: Node = serde_json::from_slice(node).unwrap();
+                let node: Node = serde_json::from_slice(node).expect("Failed to deserialize node");
                 if ui
-                    .selectable_label(self.current_node.as_deref() == Some(&String::from_utf8(id.to_vec()).unwrap()), &node.title)
+                    .selectable_label(self.current_node.as_deref() == Some(&String::from_utf8(id.to_vec()).expect("Failed to convert id to string ")), &node.title)
                     .clicked()
                 {
                     node_to_select = Some(id);
@@ -49,14 +50,11 @@ impl eframe::App for AppState {
             }
 
             if let Some(id) = node_to_select {
-                self.current_node = Some(String::from_utf8(id.to_vec()).unwrap());
+                self.current_node = Some(String::from_utf8(id.to_vec()).expect("Failed to convert id to string"));
             }
             if ui.button("New Note").clicked() {
                 let id = self.add_node("New Note".to_string(), String::new());
-                self.current_node = Some(id.unwrap());
-            }
-            if ui.button("Toggle Graph").clicked() {
-                self.show_graph = !self.show_graph;
+                self.current_node = Some(id.expect("Failed to add new note"));
             }
         });
 
@@ -65,15 +63,15 @@ impl eframe::App for AppState {
             let current_node_id = self.current_node.clone();
 
             if let Some(current_id) = current_node_id {
-                if let Some(value) = self.db.get(&current_id).unwrap() {
-                    let mut node: Node = serde_json::from_slice(&value).unwrap();
-                    println!("Current node: {:?}", node);
+                if let Some(value) = self.db.get(&current_id).expect("Failed to get node") {
+                    let mut node: Node = serde_json::from_slice(&value).expect("Failed to deserialize node");
+                    // println!("Current node: {:?}", node);
 
                     // Update the links and refresh the graph
-                    self.update_links(&current_id, &node.content).unwrap();
+                    self.update_links(&current_id, &node.content).expect("Failed to update links");
 
-                    let updated_value = self.db.get(&current_id).unwrap().unwrap();
-                    node = serde_json::from_slice(&updated_value).unwrap();
+                    let updated_value = self.db.get(&current_id).expect("Failed to get node").expect("Node not found");
+                    node = serde_json::from_slice(&updated_value).expect("Failed to deserialize node");
 
                     let mut node_title = node.title.clone();
                     let mut node_content = node.content.clone();
@@ -93,7 +91,7 @@ impl eframe::App for AppState {
                     );
 
                     if content_response.changed() {
-                        self.update_links(&current_id, &node_content).unwrap();
+                        self.update_links(&current_id, &node_content).expect("Failed to update links");
                     }
 
                     ui.separator();
@@ -110,7 +108,7 @@ impl eframe::App for AppState {
                         ui.label("Links:");
                         for link in &node_links {
                             if let Ok(Some(linked_node)) = self.db.get(link) {
-                                let linked_node: Node = serde_json::from_slice(&linked_node).unwrap();
+                                let linked_node: Node = serde_json::from_slice(&linked_node).expect("Failed to deserialize linked node");
                                 if ui.button(&linked_node.title).clicked() {
                                     self.current_node = Some(link.clone());
                                 }
@@ -124,8 +122,8 @@ impl eframe::App for AppState {
 
                     node.title = node_title;
                     node.content = node_content;
-                    let updated_node = serde_json::to_vec(&node).unwrap();
-                    self.db.insert(current_id.clone(), updated_node).unwrap();
+                    let updated_node = serde_json::to_vec(&node).expect("Failed to serialize node");
+                    self.db.insert(current_id.clone(), updated_node).expect("Failed to update node");
                 } else {
                     self.current_node = None;
                 }
