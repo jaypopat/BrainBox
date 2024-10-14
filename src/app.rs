@@ -1,69 +1,86 @@
-use std::collections::HashMap;
-use egui_commonmark::CommonMarkCache;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use crate::node::Node;
-#[derive(Serialize, Deserialize)]
+use egui_commonmark::CommonMarkCache;
+use regex::Regex;
+use serde::Serialize;
+use sled::Db;
+use uuid::Uuid;
+use crate::graph::MyGraph;
+#[derive(Serialize)]
 pub(crate) struct AppState {
-    pub(crate) nodes: HashMap<String, Node>,
     pub(crate) current_node: Option<String>,
     pub(crate) search_query: String,
     #[serde(skip)]
     pub(crate) markdown_cache: CommonMarkCache,
-}
-impl Default for AppState {
-    fn default() -> Self {
-        let mut state = Self {
-            nodes: HashMap::new(),
-            current_node: None,
-            search_query: String::new(), // Initialize search_query
-            markdown_cache: CommonMarkCache::default(),
-        };
-        let welcome_id = state.add_node(
-            "Welcome".to_string(),
-            "# Welcome to your Obsidian-like App!\n\nThis is a **Markdown** editor. You can use all standard Markdown syntax here.\n\n- Create lists\n- Add **bold** and *italic* text\n- Create [[links]] to other notes\n\nEnjoy organizing your thoughts!".to_string(),
-        );
-        // seeding for testing purposes
-        state.add_node("Node 1".to_string(), "This is the content of Node 1".to_string());
-        state.add_node("Node 2".to_string(), "This is the content of Node 2".to_string());
-        state.add_node("Node 3".to_string(), "This is the content of Node 3".to_string());
-        state.add_node("Node 4".to_string(), "This is the content of Node 4".to_string());
-        state.add_node("Node 5".to_string(), "This is the content of Node 5".to_string());
-        state.current_node = Some(welcome_id);
-
-        state
-    }
+    pub(crate) graph: MyGraph,
+    pub(crate) show_graph: bool,
+    #[serde(skip)]
+    pub(crate) db: Db,
 }
 impl AppState {
-    pub(crate) fn add_node(&mut self, title: String, content: String) -> String {
+    pub fn new() -> sled::Result<Self> {
+        let db = sled::open("Brainbox")?;
+
+        let state = AppState {
+            current_node: None,
+            search_query: String::new(),
+            markdown_cache: CommonMarkCache::default(),
+            graph: MyGraph::new(&db).unwrap(),
+            show_graph: false,
+            db,
+        };
+
+        Ok(state)
+    }
+    pub(crate) fn add_node(&mut self, title: String, content: String) -> sled::Result<String> {
         let id = Uuid::new_v4().to_string();
         let node = Node::new(id.clone(), title, content);
-        self.nodes.insert(id.clone(), node);
-        id
+        let s_node = serde_json::to_vec(&node).unwrap();
+        self.db.insert(id.clone(), s_node)?;
+        Ok(id)
     }
 
-    pub(crate) fn delete_node(&mut self, id: &str) {
-        self.nodes.remove(id);
+    pub(crate) fn delete_node(&mut self, id: &str) -> sled::Result<()> {
+        self.db.remove(id)?;
         if self.current_node.as_deref() == Some(id) {
             self.current_node = None;
         }
-        for node in self.nodes.values_mut() {
+        // Update links in all nodes
+        for item in self.db.iter() {
+            let (key, value) = item?;
+            let mut node: Node = serde_json::from_slice(&value).unwrap();
             node.links.retain(|link| link != id);
+            let updated_node = serde_json::to_vec(&node).unwrap();
+            self.db.insert(key, updated_node)?;
         }
+        Ok(())
     }
-    pub(crate) fn update_links(&mut self, node_id: &str, content: &str) {
-        // used regex - tried to use parser and event based approach but link was not part of the elements enum
+    // tried using parser for events but link was not a part of the elements enum hence the regex
+    pub(crate) fn update_links(&mut self, node_id: &str, content: &str) -> sled::Result<()> {
         let mut new_links = Vec::new();
-        for cap in regex::Regex::new(r"\[\[(.+?)]]").unwrap().captures_iter(content) {
+        let re = Regex::new(r"\[\[(.+?)]]").unwrap();
+        for cap in re.captures_iter(content) {
             if let Some(link_title) = cap.get(1) {
-                if let Some((id, _)) = self.nodes.iter().find(|(_, node)| node.title == link_title.as_str()) {
-                    new_links.push(id.clone());
+                for item in self.db.iter() {
+                    let (key, value) = item?;
+                    let node: Node = serde_json::from_slice(&value).unwrap();
+                    println!("Checking node: {} with ID: {}", node.title, node.id);
+                    if node.title == link_title.as_str() {
+                        println!("Link found: {}", link_title.as_str());
+                        if let Ok(key_str) = String::from_utf8(key.to_vec()) {
+                            println!("Link ID found: {}", key_str);
+                            new_links.push(key_str);
+                        }
+                    }
                 }
             }
         }
-        if let Some(node) = self.nodes.get_mut(node_id) {
+        if let Some(value) = self.db.get(node_id)? {
+            let mut node: Node = serde_json::from_slice(&value).unwrap();
             node.links = new_links;
+            let updated_node = serde_json::to_vec(&node).unwrap();
+            self.db.insert(node_id, updated_node)?;
+            println!("Node id- {:?} title{} Updated node links: {:?}", node.id, node.title, node.links);
         }
+        Ok(())
     }
 }
-
