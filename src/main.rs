@@ -1,7 +1,7 @@
 mod app;
+mod graph;
 mod node;
 mod ui;
-mod graph;
 
 use app::AppState;
 use eframe::Error;

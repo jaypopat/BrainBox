@@ -1,10 +1,10 @@
+use crate::graph::MyGraph;
 use crate::node::Node;
 use egui_commonmark::CommonMarkCache;
 use regex::Regex;
 use serde::Serialize;
 use sled::Db;
 use uuid::Uuid;
-use crate::graph::MyGraph;
 #[derive(Serialize)]
 pub(crate) struct AppState {
     pub(crate) current_node: Option<String>,
@@ -47,7 +47,8 @@ impl AppState {
         // Update links in all nodes
         for item in self.db.iter() {
             let (key, value) = item?;
-            let mut node: Node = serde_json::from_slice(&value).expect("Failed to deserialize node");
+            let mut node: Node =
+                serde_json::from_slice(&value).expect("Failed to deserialize node");
             node.links.retain(|link| link != id);
             let updated_node = serde_json::to_vec(&node).expect("Failed to serialize node");
             self.db.insert(key, updated_node)?;
@@ -62,7 +63,8 @@ impl AppState {
             if let Some(link_title) = cap.get(1) {
                 for item in self.db.iter() {
                     let (key, value) = item?;
-                    let node: Node = serde_json::from_slice(&value).expect("Failed to deserialize node");
+                    let node: Node =
+                        serde_json::from_slice(&value).expect("Failed to deserialize node");
                     // println!("Checking node: {} with ID: {}", node.title, node.id);
                     if node.title == link_title.as_str() {
                         // println!("Link found: {}", link_title.as_str());
@@ -75,7 +77,8 @@ impl AppState {
             }
         }
         if let Some(value) = self.db.get(node_id)? {
-            let mut node: Node = serde_json::from_slice(&value).expect("Failed to deserialize node");
+            let mut node: Node =
+                serde_json::from_slice(&value).expect("Failed to deserialize node");
             node.links = new_links;
             let updated_node = serde_json::to_vec(&node).expect("Failed to serialize node");
             self.db.insert(node_id, updated_node)?;

@@ -1,7 +1,7 @@
 use crate::node::Node;
 use egui::Ui;
 use egui_graphs::{Graph, GraphView};
-use petgraph::stable_graph::StableGraph;
+use petgraph::stable_graph::{NodeIndex, StableGraph};
 use petgraph::Directed;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -11,9 +11,12 @@ pub struct MyGraph {
     #[serde(skip)]
     pub graph: Graph<String, ()>,
     #[serde(skip)]
-    node_map: HashMap<String, petgraph::graph::NodeIndex>,
+    node_map: NodeMapType,
 }
 
+// type aliases
+type GraphType = StableGraph<String, (), Directed>;
+type NodeMapType = HashMap<String, NodeIndex>;
 impl MyGraph {
     pub(crate) fn new(db: &sled::Db) -> sled::Result<Self> {
         let (g, node_map) = Self::create_graph_from_db(db)?;
@@ -36,8 +39,7 @@ impl MyGraph {
         Ok(())
     }
 
-
-    fn create_graph_from_db(db: &sled::Db) -> sled::Result<(StableGraph<String, (), Directed>, HashMap<String, petgraph::graph::NodeIndex>)> {
+    fn create_graph_from_db(db: &sled::Db) -> sled::Result<(GraphType, NodeMapType)> {
         let mut g: StableGraph<String, (), Directed> = StableGraph::new();
         let mut node_map = HashMap::new();
 
@@ -51,11 +53,7 @@ impl MyGraph {
         Ok((g, node_map))
     }
 
-    fn create_nodes(
-        db: &sled::Db,
-        g: &mut StableGraph<String, (), Directed>,
-        node_map: &mut HashMap<String, petgraph::graph::NodeIndex>,
-    ) -> sled::Result<()> {
+    fn create_nodes(db: &sled::Db, g: &mut GraphType, node_map: &mut NodeMapType) -> sled::Result<()> {
         for item in db.iter() {
             let (key, value) = item?;
             let node: Node = serde_json::from_slice(&value).expect("Failed to deserialize node");
@@ -66,11 +64,7 @@ impl MyGraph {
         Ok(())
     }
 
-    fn create_edges(
-        db: &sled::Db,
-        g: &mut StableGraph<String, (), Directed>,
-        node_map: &HashMap<String, petgraph::graph::NodeIndex>,
-    ) -> sled::Result<()> {
+    fn create_edges(db: &sled::Db, g: &mut GraphType, node_map: &NodeMapType) -> sled::Result<()> {
         for item in db.iter() {
             let (key, value) = item?;
             let node: Node = serde_json::from_slice(&value).expect("Failed to deserialize node");
