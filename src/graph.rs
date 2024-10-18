@@ -53,7 +53,11 @@ impl MyGraph {
         Ok((g, node_map))
     }
 
-    fn create_nodes(db: &sled::Db, g: &mut GraphType, node_map: &mut NodeMapType) -> sled::Result<()> {
+    fn create_nodes(
+        db: &sled::Db,
+        g: &mut GraphType,
+        node_map: &mut NodeMapType,
+    ) -> sled::Result<()> {
         for item in db.iter() {
             let (key, value) = item?;
             let node: Node = serde_json::from_slice(&value).expect("Failed to deserialize node");
